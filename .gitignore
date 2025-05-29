@@ -4,7 +4,6 @@
 .DS_Store
 charts
 source
-README.md
 
 #temp
 argocd/**/workload*
