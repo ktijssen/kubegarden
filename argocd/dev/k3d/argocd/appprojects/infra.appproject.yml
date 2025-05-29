@@ -8,7 +8,7 @@ spec:
     - namespace: '!default'
       server: '*'
   sourceRepos:
-    - https://github.com/ktijssen/local-dev*
+    - '*'
   namespaceResourceWhitelist:
     - group: '*'
       kind: '*'
