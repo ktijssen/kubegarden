@@ -50,6 +50,12 @@ tasks:
           ARGOCD_APPLICATIONS:
             sh: argocd app list -o name -l 'app.kubernetes.io/name in (ingress-nginx,local-path-provisioner)'
 
+      # Sync ArgoCD and Cilium
+      - task: sync
+        vars:
+          ARGOCD_APPLICATIONS:
+            sh: argocd app list -o name -l 'app.kubernetes.io/name in (argocd,cilium)'
+
       # Deploy all apps unless SKIP_DEPLOY is set to true
       - task: sync-all-apps
 
