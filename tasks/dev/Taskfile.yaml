@@ -60,6 +60,7 @@ tasks:
       - task: sync-all-apps
 
       - cmd: gum log --level info "Local deployment complete."
+      - cmd: gum log --level info "ArgoCD is now available at http://argocd.localhost"
 
   create-k3d-cluster:
     desc: "Wrapper task that will only execute if the CLUSTER_TYPE matches"
