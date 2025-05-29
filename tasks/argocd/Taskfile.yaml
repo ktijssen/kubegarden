@@ -1,0 +1,108 @@
+# https://taskfile.dev
+
+version: "3"
+
+includes:
+  utils: ../utils
+
+tasks:
+  login:
+    desc: "Login to ArgoCD."
+    deps:
+      - task: check-tools
+    requires:
+      vars:
+        - ARGOCD_SERVER
+    vars:
+      ARGOCD_USER:
+        sh: gum input --placeholder="Please input your ARGOCD USER and press [ENTER]"
+      ARGOCD_PASSWORD:
+        sh: gum input --password --placeholder="Please input your ARGOCD PASSWORD and press [ENTER]"
+    cmds:
+      - cmd: argocd login {{.ARGOCD_SERVER}} --username {{.ARGOCD_USER}} --password {{.ARGOCD_PASSWORD}} --grpc-web
+
+  bootstrap:
+    desc: "Initial deployment of ArgoCD and its required secrets."
+    summary: |
+      This will run kubectl against the currently configured cluster and deploy ArgoCD with a
+      preconfigured set of credentials and repositoris. Once ArgoCD is up it will take over it's
+      own management. This command is idempotent and can be used to restore ArgoCD as long as
+      we have access to it's git repository.
+    requires:
+      vars:
+        - ARGOCD_REPO_PASSWORD
+        - ARGOCD_REPO_URL
+        - ARGOCD_BOOTSTRAP_DIR
+    dir: "{{.ARGOCD_BOOTSTRAP_DIR}}"
+    cmds:
+      - cmd: gum log --level info $(kubectl apply -f namespace.yaml --server-side)
+      - task: create-repo-credentials-secret
+        vars:
+          ARGOCD_REPO_PASSWORD: "{{.ARGOCD_REPO_PASSWORD}}"
+          ARGOCD_REPO_URL: "{{.ARGOCD_REPO_URL}}"
+
+      # Initial apply will fail because of some missing CRDs
+      - cmd: gum spin --title "Applying initial ArgoCD manifests..." -- kustomize build --enable-helm . | kubectl apply --server-side --force-conflicts -f - >/dev/null 2>&1
+        ignore_error: true
+
+      - task: utils:wait-for
+        vars:
+          GUM_SPIN_TITLE: "Waiting for ArgoCD's CRDs to be established..."
+          CONDITION: established
+          RESOURCE: "crds/applications.argoproj.io crds/applicationsets.argoproj.io crds/appprojects.argoproj.io"
+          NAMESPACE: argocd
+
+      - task: utils:wait-for
+        vars:
+          GUM_SPIN_TITLE: "Waiting for ArgoCD's Application controller to become ready..."
+          CONDITION: ready
+          RESOURCE: pod/argocd-application-controller-0
+          NAMESPACE: argocd
+
+      # let this one fail too because of service monitors. Will fix itself after the applicationsets
+      # have been applied.
+      - cmd: gum spin --title "Final ArgoCD manifests application..." -- kustomize build --enable-helm . | kubectl apply --server-side --force-conflicts -f - >/dev/null 2>&1
+        ignore_error: true
+
+  create-repo-credentials-secret:
+    desc: "Deploy Gitlab credentials to ArgoCD namespace."
+    summary: |
+      Uses ARGOCD_REPO_ACCESS_TOKEN (requires developer role with `read_repository` scope) to create
+      'gitlab-credentials' kubernetes secret for ArgoCD. Uses current kubeconfig context.
+    deps:
+      - task: check-tools
+    requires:
+      vars:
+        - ARGOCD_REPO_PASSWORD
+        - ARGOCD_REPO_URL
+    cmds:
+      - task: utils:wait-for
+        vars:
+          GUM_SPIN_TITLE: "Waiting for the argocd namespace to be created..."
+          RESOURCE: namespace/argocd
+          CONDITION: exists
+      - cmd: |
+          gum log --level info $(kubectl apply -f -) <<EOF
+            apiVersion: v1
+            kind: Secret
+            metadata:
+              name: git-credentials
+              namespace: argocd
+              labels:
+                argocd.argoproj.io/secret-type: repo-creds
+            stringData:
+              url: {{.ARGOCD_REPO_URL}}
+              username: {{.ARGOCD_REPO_USERNAME}}
+              password: {{.ARGOCD_REPO_PASSWORD}}
+          EOF
+
+  check-tools:
+    preconditions:
+      - sh: command -v argocd > /dev/null
+        msg: "Make sure argocd is installed and in your path (https://argo-cd.readthedocs.io/en/stable/cli_installation/)."
+      - sh: command -v kubectl > /dev/null
+        msg: "Make sure kubectl is installed and in your path."
+      - sh: command -v gum > /dev/null
+        msg: "Make sure gum is installed and in your path (https://github.com/charmbracelet/gum)"
+      - sh: command -v yq > /dev/null
+        msg: "Make sure yq is installed and in your path (https://github.com/mikefarah/yq)"

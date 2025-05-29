@@ -1,0 +1,12 @@
+.task
+.envrc
+.env
+.DS_Store
+charts
+source
+README.md
+
+#temp
+argocd/**/workload*
+docs/
+config/**

@@ -1,0 +1,33 @@
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: local
+
+image: rancher/k3s:v1.31.4-k3s1
+
+network: local
+
+volumes:
+  - volume: server-0-var-lib-rancher-k3s-agent-containerd:/var/lib/rancher/k3s/agent/containerd
+    nodeFilters:
+      - server:0
+
+ports:
+  - port: '80:80'
+    nodeFilters:
+      - loadbalancer
+  - port: '443:443'
+    nodeFilters:
+      - loadbalancer
+
+options:
+  k3s:
+    extraArgs:
+      - arg: "--disable=traefik,metrics-server"
+        nodeFilters:
+          - server:*
+  runtime:
+    ulimits:
+      - name: nofile
+        soft: 65535
+        hard: 65535

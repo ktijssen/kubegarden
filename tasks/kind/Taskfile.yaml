@@ -1,0 +1,87 @@
+# https://taskfile.dev
+
+version: "3"
+
+includes:
+  utils: ../utils
+
+tasks:
+  create:
+    desc: "Takes $KIND_CONFIG and creates a kind cluster."
+    deps:
+      - task: check-tools
+    requires:
+      vars:
+        - KIND_CONFIG
+        - CILIUM_VERSION
+    status:
+      - '[[ -n "$(kind get nodes --name {{.CLUSTER_NAME}})" ]]'
+    vars:
+      CLUSTER_NAME:
+        sh: if [[ "{{.KIND_CONFIG}}" != '' ]]; then yq '.name' '{{.KIND_CONFIG}}'; fi
+    cmds:
+      - cmd: kind create cluster --config '{{.KIND_CONFIG}}'
+      - cmd: |
+          cilium install \
+            --version {{.CILIUM_VERSION}} \
+            --set kubeProxyReplacement=true \
+            --set k8sServiceHost=127.0.0.1 \
+            --set k8sServicePort=6443
+
+      - task: utils:wait-for
+        vars:
+          GUM_SPIN_TITLE: "Waiting for cluster dns to become available..."
+          KUBECONTEXT: kind-{{.CLUSTER_NAME}}
+          RESOURCE: deployment/coredns
+          CONDITION: available
+          NAMESPACE: kube-system
+
+      # approve all kubelet certificates. This is required for the metrics-server to verify the
+      # kubelet TLS connection. These csr requests are enabled by the `serverTLSBootstrap: true`
+      # setting fed to kubeadm via a kind configuration. This is *NOT* needed in production.
+      - task: utils:wait-for
+        vars:
+          GUM_SPIN_TITLE: "Waiting for kubelet certificate signing requests..."
+          KUBECONTEXT: kind-{{.CLUSTER_NAME}}
+          RESOURCE: csr
+          CONDITION: exists
+      - cmd: kubectl certificate approve $(kubectl get csr -o jsonpath='{.items[?(@.spec.signerName=="kubernetes.io/kubelet-serving")].metadata.name}')
+
+      - task: utils:wait-for
+        vars:
+          GUM_SPIN_TITLE: "Waiting for cilium crd to be created..."
+          RESOURCE: crds/ciliumloadbalancerippools.cilium.io
+          CONDITION: exists
+      - cmd: |
+          kubectl apply -f - <<EOF
+            apiVersion: "cilium.io/v2alpha1"
+            kind: CiliumLoadBalancerIPPool
+            metadata:
+              name: "local-docker-network"
+            spec:
+              blocks:
+              - cidr: "$(docker network inspect -f json kind | jq -r '.[0].IPAM.Config[].Gateway | select( . != null )')/26"
+          EOF
+
+  delete:
+    desc: "Takes $KIND_CONFIG which points to a kind configuration file and destroys the cluster."
+    deps:
+      - task: check-tools
+    requires:
+      vars: [KIND_CONFIG]
+    status:
+      - '[[ -z "$(kind get nodes --name {{.CLUSTER_NAME}})" ]]'
+    vars:
+      CLUSTER_NAME:
+        sh: if [[ "{{.KIND_CONFIG}}" != '' ]]; then yq '.name' '{{.KIND_CONFIG}}'; fi
+    cmds:
+      - cmd: kind delete cluster --name '{{.CLUSTER_NAME}}'
+
+  check-tools:
+    preconditions:
+      - sh: command -v kind > /dev/null
+        msg: "Make sure kind is installed and in your path (https://kind.sigs.k8s.io/docs/user/quick-start/#installation)."
+      - sh: command -v kubectl > /dev/null
+        msg: "Make sure kubectl is installed and in your path (https://downloadkubernetes.com/)."
+      - sh: command -v yq > /dev/null
+        msg: "Make sure yq is installed and in your path (https://github.com/mikefarah/yq)"

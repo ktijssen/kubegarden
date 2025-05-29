@@ -1,0 +1,17 @@
+{
+  "build": {
+    "context": "..",
+    "dockerfile": "Dockerfile"
+  },
+  "postCreateCommand": "git config --global --add safe.directory ${containerWorkspaceFolder} && /usr/local/py-utils/bin/pre-commit install --install-hooks",
+  "postStartCommand": "task down",
+  "runArgs": [
+    "--add-host=argocd.localhost:127.0.0.1",
+    "--add-host=registry.localhost:127.0.0.1"
+  ],
+  "appPort": [
+    80,
+    443,
+    6443
+  ]
+}

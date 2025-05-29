@@ -1,0 +1,23 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: local
+
+nodes:
+  - role: control-plane
+    # lock to k8s 1.28 to keep parity with DOKS
+    image: kindest/node:v1.31.4@sha256:2cb39f7295fe7eafee0842b1052a599a4fb0f8bcf3f83d96c7f4864c357c6c30
+    extraPortMappings:
+      - containerPort: 32080
+        hostPort: 80
+      - containerPort: 32443
+        hostPort: 443
+    kubeadmConfigPatches:
+      - |
+        kind: KubeletConfiguration
+        serverTLSBootstrap: true
+
+networking:
+  apiServerAddress: 127.0.0.1
+  apiServerPort: 6443
+  kubeProxyMode: none
+  disableDefaultCNI: true

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "prConcurrentLimit": 50,
+  "packageRules": [
+    {
+      "matchFileNames": [
+        "*/dev/**"
+      ],
+      "extends": [
+        ":semanticCommitScope({{packageName}}/dev)"
+      ],
+      "groupName": "{{packageName}}-dev",
+      "labels": [
+        "stage::development",
+        "bot::renovate",
+        "package::{{packageName}}"
+      ]
+    }
+  ]
+}

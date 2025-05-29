@@ -1,0 +1,232 @@
+# https://taskfile.dev
+
+version: "3"
+
+includes:
+  argocd: ../argocd
+  k3d: ../k3d
+  kind: ../kind
+  utils: ../utils
+
+interval: 1s
+
+tasks:
+  up:
+    requires:
+      vars:
+        - PERSONAL_ACCESS_TOKEN
+        - CLUSTER_TYPE
+
+    preconditions:
+      - sh: '[[ "{{.CLUSTER_TYPE}}" =~ "^(kind|k3d|talos)$" ]]'
+        msg: "Unsupported CLUSTER_TYPE: {{.CLUSTER_TYPE}}"
+
+    cmds:
+      - task: create-k3d-cluster
+      - task: create-kind-cluster
+
+      # switch to argocd as the default namespace, this helps with argocd cli's core mode.
+      - cmd: gum log --level info $(kubectl config set-context --current --namespace argocd)
+      - cmd: gum log --level info $(argocd login --core)
+
+      - task: argocd:bootstrap
+        vars:
+          ARGOCD_REPO_USERNAME: "{{.USERNAME}}"
+          ARGOCD_REPO_PASSWORD: "{{.PERSONAL_ACCESS_TOKEN}}"
+          ARGOCD_REPO_URL: "{{.ARGOCD_REPO_URL}}"
+          ARGOCD_BOOTSTRAP_DIR: "{{.ARGOCD_BOOTSTRAP_DIR}}"
+
+      - task: utils:wait-for
+        vars:
+          GUM_SPIN_TITLE: "Waiting for {{.ARGOCD_APPSET_NAME}} ApplicationSet to be up to date..."
+          CONDITION: ResourcesUpToDate
+          RESOURCE: applicationsets/{{.ARGOCD_APPSET_NAME}}
+          NAMESPACE: argocd
+
+      # Deploy ingress-nginx, local-path-provisioner
+      - task: sync
+        vars:
+          ARGOCD_ARGS: "--async"
+          ARGOCD_APPLICATIONS:
+            sh: argocd app list -o name -l 'app.kubernetes.io/name in (ingress-nginx,local-path-provisioner)'
+
+      # Deploy all apps unless SKIP_DEPLOY is set to true
+      - task: sync-all-apps
+
+      - cmd: gum log --level info "Local deployment complete."
+
+  create-k3d-cluster:
+    desc: "Wrapper task that will only execute if the CLUSTER_TYPE matches"
+    status:
+      - '! [[ "{{.CLUSTER_TYPE}}" == "k3d" ]]'
+    cmds:
+      - task: k3d:create
+        vars:
+          K3D_CONFIG: k3d-config.yaml
+
+  create-kind-cluster:
+    desc: "Wrapper task that will only execute if the CLUSTER_TYPE matches"
+    status:
+      - '! [[ "{{.CLUSTER_TYPE}}" == "kind" ]]'
+    cmds:
+      - task: kind:create
+        vars:
+          KIND_CONFIG: kind-config.yaml
+
+  destroy:
+    cmds:
+      - task: k3d:delete
+        vars:
+          K3D_CONFIG: k3d-config.yaml
+      - task: kind:delete
+        vars:
+          KIND_CONFIG: kind-config.yaml
+
+  switch:
+    requires:
+      vars:
+        - REVISION
+        - ARGOCD_REPO_URL
+    cmds:
+      - cmd: |
+          kubectl patch applicationset/{{.ARGOCD_APPSET_NAME}} \
+            --namespace argocd \
+            --type json \
+            --patch '[
+              {"op":"replace","path":"/spec/generators/0/git/repoURL","value":{{.ARGOCD_REPO_URL | quote}}},
+              {"op":"replace","path":"/spec/generators/0/git/revision","value":{{.REVISION | quote}}},
+              {"op":"replace","path":"/spec/template/spec/source/targetRevision","value":{{.REVISION | quote}}}
+            ]'
+      - task: utils:wait-for
+        vars:
+          GUM_SPIN_TITLE: "Waiting for {{.ARGOCD_APPSET_NAME}} ApplicationSet to be up to date..."
+          CONDITION: ResourcesUpToDate
+          RESOURCE: applicationsets/{{.ARGOCD_APPSET_NAME}}
+          NAMESPACE: argocd
+
+  sync-all-apps:
+    internal: true
+    deps:
+      - task: argocd:check-tools
+    vars:
+      ARGOCD_APPLICATIONS:
+        sh: argocd app list -o name
+    status:
+      - '[[ "{{.SKIP_DEPLOY}}" == "true" ]]'
+    ignore_error: true
+    cmds:
+      - for: { var: ARGOCD_APPLICATIONS }
+        cmd: |
+          argocd app terminate-op {{.ITEM}} 2> /dev/null || true
+          gum log --level=info "Operations terminated for {{.ITEM}}"
+      - cmd: gum spin --show-error --title "Syncing all Applications..." -- argocd app sync -l 'app.kubernetes.io/name!=argocd' --async --retry-limit 5
+      - cmd: gum log --level=info "Applications synced"
+
+  sync:
+    deps:
+      - task: argocd:check-tools
+    requires:
+      vars:
+        - ARGOCD_APPLICATIONS
+    cmds:
+      - for: { var: ARGOCD_APPLICATIONS }
+        cmd: |
+          argocd app terminate-op {{.ITEM}} 2> /dev/null || true
+          gum log --level=info "Operations terminated for {{.ITEM}}"
+          gum spin --show-error --title "Syncing application {{.ITEM}}..." -- argocd app sync --server-side --prune {{.ITEM}} {{.ARGOCD_ARGS}} {{.CLI_ARGS}}
+          gum log --level=info "Application {{.ITEM}} synced"
+
+  sync-profiles:
+    deps:
+      - task: argocd:check-tools
+    vars:
+      # HACK: we use a json object here until we can natively use maps in task. See https://taskfile.dev/experiments/map-variables/
+      PREDEFINED_PROFILES: |
+        {
+          "logs": ["alloy", "grafana", "loki"],
+          "metrics": ["alloy", "grafana", "mimir"],
+          "traces": ["alloy", "grafana", "tempo"]
+        }
+      PREDEFINED_PROFILES_MAP:
+        ref: "fromJson .PREDEFINED_PROFILES"
+
+      PROFILE_SELECTION:
+        sh: |
+          gum choose --no-limit --header="Choose which profiles to deploy:" {{.PREDEFINED_PROFILES_MAP | keys | sortAlpha | join " "}}
+
+      # HACK: get a deduplicated list of apps that we want to sync using text templates.
+      SERVICE_NAMES: |
+        {{- $services := list }}
+        {{- $profiles := splitList "\n" .PROFILE_SELECTION }}
+        {{- range $key, $values := .PREDEFINED_PROFILES_MAP }}
+        {{- if has $key $profiles}}{{$services = concat $services $values}}{{end}}
+        {{- end }}
+        {{- print ($services | uniq | join ", ") -}}
+    cmds:
+      - cmd: 'gum log --level=info "Deploying {{ .SERVICE_NAMES }}"'
+      - task: sync
+        vars:
+          ARGOCD_APPLICATIONS:
+            sh: "argocd app list -o name -l 'app.kubernetes.io/name in ({{.SERVICE_NAMES}})'"
+
+  sync-apps:
+    deps:
+      - task: argocd:check-tools
+    vars:
+      ARGOCD_ARGS:
+        sh: if gum confirm 'Enable async?' ; then echo "--async" ; fi
+      ARGOCD_APPLICATIONS:
+        sh: gum choose --height=15 --no-limit --header="Choose the services to deploy:" <<<$(argocd app list --output name)
+    preconditions:
+      - sh: '[[ -n "{{.ARGOCD_APPLICATIONS}}" ]]'
+        msg: "Unable to list ArgoCD Applications or no Applications present."
+    cmds:
+      - task: sync
+        vars:
+          ARGOCD_APPLICATIONS: "{{.ARGOCD_APPLICATIONS}}"
+          ARGOCD_ARGS: "{{.ARGOCD_ARGS}}"
+
+  sync-local:
+    deps:
+      - task: argocd:check-tools
+    vars:
+      SERVICE_NAME:
+        # this command relies on the find implementation to return paths like ./some-service/dev/
+        sh: 'find . -maxdepth 2 -type d -name dev | cut -d / -f 2 | gum filter --header="Choose a service:"'
+      CLUSTER_NAME:
+        sh: 'ls {{.SERVICE_NAME}}/dev | gum filter --header="Choose a target cluster:"'
+      NAMESPACE:
+        sh: 'ls {{.SERVICE_NAME}}/dev/{{.CLUSTER_NAME}} | gum filter --header="Choose a namespace:"'
+
+      APP_KUBERNETES_IO_INSTANCE: "{{.SERVICE_NAME}}-dev-{{.CLUSTER_NAME}}"
+      MANIFEST_PATH: "{{.SERVICE_NAME}}/dev/{{.CLUSTER_NAME}}/{{.NAMESPACE}}"
+    label: "{{.APP_KUBERNETES_IO_INSTANCE}}"
+    cmds:
+      - cmd: |
+          find . {{.MANIFEST_PATH}} -type f -iname '*.yaml' | entr -c \
+            argocd app sync \
+              --server-side \
+              --prune \
+              --selector app.kubernetes.io/instance={{ .APP_KUBERNETES_IO_INSTANCE }} \
+              --local-repo-root . \
+              --local {{.MANIFEST_PATH}} \
+              {{.CLI_ARGS}}
+
+  apply-local:
+    deps:
+      - task: argocd:check-tools
+    vars:
+      SERVICE_NAME:
+        # this command relies on the find implementation to return paths like ./some-service/dev/
+        sh: 'find . -maxdepth 2 -type d -name dev | cut -d / -f 2 | sort | gum filter --header="Choose a service:"'
+      CLUSTER_NAME:
+        sh: 'ls {{.SERVICE_NAME}}/dev | gum filter --header="Choose a target cluster:"'
+      NAMESPACE:
+        sh: 'ls {{.SERVICE_NAME}}/dev/{{.CLUSTER_NAME}} | gum filter --header="Choose a namespace:"'
+
+      APP_KUBERNETES_IO_INSTANCE: "{{.SERVICE_NAME}}-dev-{{.CLUSTER_NAME}}"
+      MANIFEST_PATH: "{{.SERVICE_NAME}}/dev/{{.CLUSTER_NAME}}/{{.NAMESPACE}}"
+    label: "{{.APP_KUBERNETES_IO_INSTANCE}}"
+    cmds:
+      - cmd: |
+          kustomize build --enable-helm {{.MANIFEST_PATH}} | kubectl apply -f - --server-side --force-conflicts

@@ -1,0 +1,51 @@
+# https://taskfile.dev
+
+version: '3'
+
+includes:
+  utils: ../utils
+
+tasks:
+  create:
+    desc: "Takes $K3D_CONFIG and creates the cluster."
+    deps:
+      - task: check-tools
+    requires:
+      vars: [K3D_CONFIG]
+    status:
+      - if [[ "{{.K3D_CONFIG}}" == '' ]]; then exit 0; else k3d cluster get '{{.CLUSTER_NAME}}'; fi
+    vars:
+      CLUSTER_NAME:
+        sh: if [[ "{{.K3D_CONFIG}}" != '' ]]; then yq '.metadata.name' '{{.K3D_CONFIG}}'; fi
+    cmds:
+      - cmd: k3d cluster create --config '{{.K3D_CONFIG}}'
+      - task: utils:wait-for
+        vars:
+          GUM_SPIN_TITLE: "Waiting for cluster dns to become available..."
+          KUBECONTEXT: k3d-{{.CLUSTER_NAME}}
+          RESOURCE: deployment/coredns
+          CONDITION: available
+          NAMESPACE: kube-system
+
+  delete:
+    desc: "Takes $K3D_CONFIG which points to a k3d config file and destroys the cluster."
+    deps:
+      - task: check-tools
+    requires:
+      vars: [K3D_CONFIG]
+    status:
+      - if [[ "{{.K3D_CONFIG}}" == '' ]]; then exit 0; else exit 1; fi
+    vars:
+      CLUSTER_NAME:
+        sh: if [[ "{{.K3D_CONFIG}}" != '' ]]; then yq '.metadata.name' '{{.K3D_CONFIG}}'; fi
+    cmds:
+      - cmd: k3d cluster delete --config '{{.K3D_CONFIG}}'
+
+  check-tools:
+    preconditions:
+      - sh: command -v k3d > /dev/null
+        msg: "Make sure k3d is installed and in your path (https://k3d.io/)."
+      - sh: command -v kubectl > /dev/null
+        msg: "Make sure kubectl is installed and in your path (https://downloadkubernetes.com/)."
+      - sh: command -v yq > /dev/null
+        msg: "Make sure yq is installed and in your path (https://github.com/mikefarah/yq)"

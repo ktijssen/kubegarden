@@ -1,0 +1,76 @@
+# https://taskfile.dev
+
+version: "3"
+
+tasks:
+  until-succeeds:
+    desc: "Execute the command until it succeeds."
+    deps:
+      - task: check-tools
+    requires:
+      vars:
+        - SHELL_COMMAND
+    vars:
+      TEMP_FILE:
+        sh: mktemp
+    cmds:
+      - defer: rm {{.TEMP_FILE}}
+      - cmd: |
+          cat > {{.TEMP_FILE}} <<EOF
+            until {{.SHELL_COMMAND}} ; do
+              sleep 2
+            done
+          EOF
+      - task: execute-bash
+        vars:
+          GUM_SPIN_TITLE: "{{.GUM_SPIN_TITLE}}"
+          TEMP_FILE: "{{.TEMP_FILE}}"
+
+  wait-for:
+    desc: "Will wait for resources to gain the requested condition."
+    deps:
+      - task: check-tools
+    requires:
+      vars:
+        - RESOURCE
+        - CONDITION
+
+    vars:
+      CONDITIONAL_ARGUMENTS: "{{if .KUBECONTEXT}}--context={{.KUBECONTEXT}} {{end}} {{if .NAMESPACE}} --namespace={{.NAMESPACE}} {{end}}"
+      TEMP_FILE:
+        sh: mktemp
+
+    cmds:
+      - defer: rm {{.TEMP_FILE}}
+      - cmd: |
+          cat > {{.TEMP_FILE}} <<EOF
+            until kubectl {{.CONDITIONAL_ARGUMENTS}} get {{.RESOURCE}} &> /dev/null; do
+              sleep 2
+            done
+
+            {{- if ne .CONDITION "exists"}}
+            kubectl {{ .CONDITIONAL_ARGUMENTS }} wait --for condition={{.CONDITION}} {{.RESOURCE}} --timeout 500s
+            {{end}}
+          EOF
+      - task: execute-bash
+        vars:
+          GUM_SPIN_TITLE: "{{.GUM_SPIN_TITLE}}"
+          TEMP_FILE: "{{.TEMP_FILE}}"
+
+      - cmd: gum log --level info "{{.RESOURCE}} condition {{.CONDITION}} met"
+
+  execute-bash:
+    internal: true
+    requires:
+      vars:
+        - TEMP_FILE
+    cmds:
+      # TODO: figure out a way to not depend on bash execution here. It might work and it might be
+      # a reasonable assumption but it's just not nice and not really portable. It might be nice to
+      # have functionality like an until loop + a spinner built into task.
+      - cmd: '{{ if .GUM_SPIN_TITLE }}gum spin --show-error --title="{{.GUM_SPIN_TITLE}}" --{{end}} bash {{.TEMP_FILE}}'
+
+  check-tools:
+    preconditions:
+      - sh: command -v kubectl > /dev/null
+        msg: "Make sure kubectl is installed and in your path (https://downloadkubernetes.com/)."

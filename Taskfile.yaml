@@ -1,0 +1,77 @@
+# https://taskfile.dev
+version: "3"
+
+includes:
+  k3d:
+    taskfile: tasks/k3d
+    internal: true
+  argocd:
+    taskfile: tasks/argocd
+    internal: true
+
+  utils:
+    taskfile: tasks/utils
+    internal: true
+
+  dev:
+    taskfile: tasks/dev
+    internal: true
+
+dotenv: [".envrc", ".env"]
+
+vars:
+  # determines what type of local cluster gets deployed.
+  # Currently the only options are "kind" or "k3d" or "talos"
+  CLUSTER_TYPE: '{{ .CLUSTER_TYPE | default "k3d" }}'
+
+interval: 500ms
+
+silent: true
+
+tasks:
+  default: task --list
+
+  up:
+    desc: "Deploy entire local development environment."
+    # TODO: write a concise summary
+    cmds:
+      - task: dev:up
+
+  destroy:
+    desc: "Destroy entire local development environment."
+    aliases: [down, destroy, get-rekt]
+    cmds:
+      - task: dev:destroy
+
+  switch:
+    desc: "Switches the branch that the mgmt ApplicationSet tracks in git."
+    cmds:
+      - task: dev:switch
+        vars:
+          REVISION:
+            sh: "{{if .REVISION}} echo {{.REVISION | quote}} {{else}} git branch --show-current {{end}}"
+
+  sync-local:
+    desc: "This task watches local changes in the service directory and applies them to the local cluster."
+    cmds:
+      - task: dev:sync-local
+
+  sync:
+    desc: "This task triggers a normal sync for one or more services."
+    cmds:
+      - task: dev:sync-apps
+
+  sync-all:
+    desc: "This task triggers a sync for all services."
+    cmds:
+      - task: dev:sync-all-apps
+
+  sync-profiles:
+    desc: "Sync a pre-defined selection of applications."
+    cmds:
+      - task: dev:sync-profiles
+
+  apply-local:
+    desc: "This task applies local changes once to the local cluster."
+    cmds:
+      - task: dev:apply-local
