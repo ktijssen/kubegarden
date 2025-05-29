@@ -21,7 +21,7 @@ dotenv: [".envrc", ".env"]
 
 vars:
   # determines what type of local cluster gets deployed.
-  # Currently the only options are "kind" or "k3d" or "talos"
+  # Currently the only options are "kind" or "k3d"
   CLUSTER_TYPE: '{{ .CLUSTER_TYPE | default "k3d" }}'
 
 interval: 500ms

@@ -199,7 +199,7 @@ tasks:
     vars:
       SERVICE_NAME:
         # this command relies on the find implementation to return paths like ./some-service/dev/
-        sh: 'find . -maxdepth 2 -type d -name dev | cut -d / -f 2 | gum filter --header="Choose a service:"'
+        sh: 'find . -maxdepth 2 -type d -name dev | cut -d / -f 2 | sort | grep -v tasks | gum filter --header="Choose a service:"'
       CLUSTER_NAME:
         sh: 'ls {{.SERVICE_NAME}}/dev | gum filter --header="Choose a target cluster:"'
       NAMESPACE:
@@ -225,7 +225,7 @@ tasks:
     vars:
       SERVICE_NAME:
         # this command relies on the find implementation to return paths like ./some-service/dev/
-        sh: 'find . -maxdepth 2 -type d -name dev | cut -d / -f 2 | sort | gum filter --header="Choose a service:"'
+        sh: 'find . -maxdepth 2 -type d -name dev | cut -d / -f 2 | grep -v tasks | sort | gum filter --header="Choose a service:"'
       CLUSTER_NAME:
         sh: 'ls {{.SERVICE_NAME}}/dev | gum filter --header="Choose a target cluster:"'
       NAMESPACE:
