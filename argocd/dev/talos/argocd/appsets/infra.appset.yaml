@@ -31,7 +31,7 @@ spec:
     spec:
       project: "infra"
       destination:
-        name: '{{if eq .values.cluster "kind"}}in-cluster{{else}}{{.values.cluster}}{{end}}'
+        name: '{{if eq .values.cluster "talos"}}in-cluster{{else}}{{.values.cluster}}{{end}}'
         namespace: "{{.values.namespace}}"
       syncPolicy:
         syncOptions:
