@@ -21,7 +21,7 @@ spec:
     applicationsSync: create-update
   template:
     metadata:
-      name: "{{.values.service}}-{{.values.stage}}-{{.values.cluster}}-{{.values.namespace}}"
+      name: "{{.values.service}}"
       labels:
         app.kubernetes.io/name: "{{.values.service}}"
         app.kubernetes.io/instance: "{{.values.service}}-{{.values.stage}}-{{.values.cluster}}"
