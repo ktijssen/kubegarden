@@ -1,0 +1,114 @@
+name: local-dev
+
+networks:
+  talos:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: "192.168.250.0/24"
+          gateway: "192.168.250.1"
+
+volumes:
+  # ControlPlane1
+  cp1_var:
+  cp1_etc-cni:
+  cp1_etc-kubernetes:
+  cp1_usr-libexec-kubernetes:
+  cp1_opt:
+  cp1_system-state:
+
+  # ControlPlane2
+  cp2_var:
+  cp2_etc-cni:
+  cp2_etc-kubernetes:
+  cp2_usr-libexec-kubernetes:
+  cp2_opt:
+  cp2_system-state:
+
+  # ControlPlane3
+  cp3_var:
+  cp3_etc-cni:
+  cp3_etc-kubernetes:
+  cp3_usr-libexec-kubernetes:
+  cp3_opt:
+  cp3_system-state:
+
+
+services:
+  talos-controlplane1:
+    image: ghcr.io/siderolabs/talos:v1.10.3
+    hostname: talos-controlplane1
+    container_name: talos-controlplane1
+    environment:
+      - PLATFORM=container
+    read_only: true
+    privileged: true
+    ports:
+      - 80:32080
+      - 443:32443
+    security_opt:
+      - seccomp=unconfined
+    volumes:
+      - cp1_var:/var
+      - cp1_etc-cni:/etc/cni
+      - cp1_etc-kubernetes:/etc/kubernetes
+      - cp1_usr-libexec-kubernetes:/usr/libexec/kubernetes
+      - cp1_opt:/opt
+      - cp1_system-state:/system/state
+    tmpfs:
+      - /run
+      - /system
+      - /tmp
+    networks:
+      talos:
+        ipv4_address: 192.168.250.11
+
+  talos-controlplane2:
+    image: ghcr.io/siderolabs/talos:v1.10.3
+    hostname: talos-controlplane2
+    container_name: talos-controlplane2
+    environment:
+      - PLATFORM=container
+    read_only: true
+    privileged: true
+    security_opt:
+      - seccomp=unconfined
+    volumes:
+      - cp2_var:/var
+      - cp2_etc-cni:/etc/cni
+      - cp2_etc-kubernetes:/etc/kubernetes
+      - cp2_usr-libexec-kubernetes:/usr/libexec/kubernetes
+      - cp2_opt:/opt
+      - cp2_system-state:/system/state
+    tmpfs:
+      - /run
+      - /system
+      - /tmp
+    networks:
+      talos:
+        ipv4_address: 192.168.250.12
+
+  talos-controlplane3:
+    image: ghcr.io/siderolabs/talos:v1.10.3
+    hostname: talos-controlplane3
+    container_name: talos-controlplane3
+    environment:
+      - PLATFORM=container
+    read_only: true
+    privileged: true
+    security_opt:
+      - seccomp=unconfined
+    volumes:
+      - cp3_var:/var
+      - cp3_etc-cni:/etc/cni
+      - cp3_etc-kubernetes:/etc/kubernetes
+      - cp3_usr-libexec-kubernetes:/usr/libexec/kubernetes
+      - cp3_opt:/opt
+      - cp3_system-state:/system/state
+    tmpfs:
+      - /run
+      - /system
+      - /tmp
+    networks:
+      talos:
+        ipv4_address: 192.168.250.13

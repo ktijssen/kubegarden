@@ -1,6 +1,6 @@
 # 🪴 Kubegarden
 
-	⁠A lightweight, local Kubernetes development playground using k3d or kind.
+	⁠A lightweight, local Kubernetes development playground using k3d, kind or talos.
 
 Kubegarden is a developer-friendly environment designed for quick and easy setup of local Kubernetes clusters. It integrates popular tools like ArgoCD, Ingress-NGINX, and more to provide a seamless platform for testing Kubernetes configurations and deploying cloud-native applications.
 
@@ -11,7 +11,7 @@ This section gives a small introduction into the exact directory structure of th
 
 All applications are deployed by ArgoCD.
 This GitHub project is configured as a Git generator in ArgoCD's [`ApplicationSet`](https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/).
-Here, [we use directory path segments](./argocd/dev/<k3d or kind>/argocd/appsets/appset.yaml) as values for the application deployment, namely:
+Here, [we use directory path segments](./argocd/dev/<k3d,kind,talos>/argocd/appsets/appset.yaml) as values for the application deployment, namely:
 
 ```
 <application name>/<environment>/<cluster to deploy to>/<Kubernetes namespace>/
@@ -23,7 +23,7 @@ This project includes a [Dev Container](https://containers.dev/) with the follow
 
 ### Features
 
-- Local cluster orchestration via [k3d](https://k3d.io/) or [kind](https://kind.sigs.k8s.io/)
+- Local cluster orchestration via [k3d](https://k3d.io/), [kind](https://kind.sigs.k8s.io/) or [talos](https://www.talos.dev/)
 - GitOps-ready with [ArgoCD](https://argo-cd.readthedocs.io/)
 - Ingress support using NGINX Ingress Controller
 - Easily customizable with Taskfile automation
@@ -39,15 +39,19 @@ For the DevContainer to run, there are a few requisites:
 - Now copy the `.env.example` file and configure the `.env` file in this project, and put in there:
   ```sh
     ## GLOBAL
-    CLUSTER_TYPE=k3d      # There are 2 options. k3d or kind
+    CLUSTER_TYPE=k3d      # There are 3 options. k3d, kind or talos
     SKIP_DEPLOY=false     # Set to `true` if you only want to deploy the minimal components the run Kubernetes
 
     ## GITHUB/GITLAB CREDENTIALS
     USERNAME=
     PERSONAL_ACCESS_TOKEN=
 
-    ## KIND
+    ## CILIUM
     CILIUM_VERSION=1.17.4
+
+    ## TALOS
+    TALOS_HA=false        # Set to `true` of you want to deploy 3 Talos nodes
+    K8S_VERSION=1.30.4    # Which version of Kubernetes you want to install
 
     ### ARGOCD
     ARGOCD_REPO_URL=https://github.com/ktijssen/kubegarden.git

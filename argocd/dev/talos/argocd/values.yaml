@@ -1,0 +1,50 @@
+controller:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 756Mi
+
+applicationSet:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 48Mi
+
+dex:
+  enabled: false
+
+repoServer:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 48Mi
+
+server:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 48Mi
+
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hostname: argocd.localhost
+    tls: false
+
+# CRDs are managed outside of this helm chart
+crds:
+  install: true
+  keep: true
+
+configs:
+  cm:
+    url: https://argocd.localhost
+    application.resourceTrackingMethod: annotation
+    statusbadge.enabled: true
+    exec.enabled: true
+    kustomize.buildOptions: "--enable-helm"
+    timeout.reconciliation: 5s
+
+  params:
+    server.insecure: true
+    server.disable.auth: true

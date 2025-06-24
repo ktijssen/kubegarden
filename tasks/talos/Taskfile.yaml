@@ -1,0 +1,176 @@
+
+# https://taskfile.dev
+
+version: "3"
+
+includes:
+  utils: ../utils
+
+env:
+  TALOSCONFIG: '{{ .TALOSCONFIG | default "./config/talosconfig" }}'
+  TALOS_VIP: '{{ .TALOS_VIP | default "192.168.250.10" }}'
+
+tasks:
+
+  create-single:
+    desc: "Creates a Talos cluster"
+    deps:
+      - task: check-tools
+    cmds:
+      - cmd: docker compose --file ./tasks/talos/compose-single.yaml up --detach
+      - task: cluster-single
+        vars:
+          TALOS_PATCHFILE: talos-config.yaml
+
+  cluster-single:
+    requires:
+      vars:
+        - TALOS_PATCHFILE
+        - TALOSCONFIG
+    vars:
+      IP_CP1:
+        sh: docker inspect talos-controlplane1 | jq -r '.[].NetworkSettings.Networks."local-dev_talos".IPAddress'
+    cmds:
+      - task: utils:until-succeeds
+        vars:
+          GUM_SPIN_TITLE: "Waiting for Talos to boot up..."
+          SHELL_COMMAND: "talosctl get ts --insecure -e {{.IP_CP1}} -n {{.IP_CP1}}"
+      - cmd: talosctl gen config talos-local https://{{.IP_CP1}}:6443 --with-docs=false --with-examples=false --kubernetes-version={{ .K8S_VERSION }} --force --output ./config --output-types "controlplane,talosconfig"
+      - cmd: talosctl config endpoint {{.IP_CP1}}
+      - cmd: talosctl config node {{.IP_CP1}}
+      - cmd: talosctl apply-config -f ./config/controlplane.yaml -n {{.IP_CP1}} -p @{{.TALOS_PATCHFILE}} --insecure
+      - cmd: gum spin --show-error --title="Waiting for Talos cluster to accept the bootstrap command..." -- sleep 5
+      - cmd: talosctl bootstrap
+      - cmd: talosctl kubeconfig --force
+      - task: utils:until-succeeds
+        vars:
+          GUM_SPIN_TITLE: "Waiting for the kubernetes-api to accept commands..."
+          SHELL_COMMAND: "kubectl get ns kube-system"
+      - task: install-cilium
+
+      # approve all kubelet certificates. This is required for the metrics-server to verify the
+      # kubelet TLS connection. These csr requests are enabled by the `serverTLSBootstrap: true`
+      # setting fed to kubeadm via a kind configuration. This is *NOT* needed in production.
+      - task: utils:wait-for
+        vars:
+          GUM_SPIN_TITLE: "Waiting for kubelet certificate signing requests..."
+          KUBECONTEXT: admin@talos-local
+          RESOURCE: csr
+          CONDITION: exists
+      - cmd: kubectl certificate approve $(kubectl get csr -o jsonpath='{.items[?(@.spec.signerName=="kubernetes.io/kubelet-serving")].metadata.name}')
+
+  create-ha:
+    desc: "Creates a HA Talos cluster"
+    deps:
+      - task: check-tools
+    cmds:
+      - cmd: docker compose --file ./tasks/talos/compose-ha.yaml up --detach
+      - task: cluster-ha
+        vars:
+          TALOS_PATCHFILE: talos-config.yaml
+
+  cluster-ha:
+    requires:
+      vars:
+        - TALOS_PATCHFILE
+        - TALOSCONFIG
+        - TALOS_VIP
+    vars:
+      IP_CP1:
+        sh: docker inspect talos-controlplane1 | jq -r '.[].NetworkSettings.Networks."local-dev_talos".IPAddress'
+      IP_CP2:
+        sh: docker inspect talos-controlplane2 | jq -r '.[].NetworkSettings.Networks."local-dev_talos".IPAddress'
+      IP_CP3:
+        sh: docker inspect talos-controlplane3 | jq -r '.[].NetworkSettings.Networks."local-dev_talos".IPAddress'
+    cmds:
+      - task: utils:until-succeeds
+        vars:
+          GUM_SPIN_TITLE: "Waiting for Talos to boot up..."
+          SHELL_COMMAND: "talosctl get ts --insecure -e {{.IP_CP1}} -n {{.IP_CP1}}"
+      - task: utils:until-succeeds
+        vars:
+          GUM_SPIN_TITLE: "Waiting for Talos to boot up..."
+          SHELL_COMMAND: "talosctl get ts --insecure -e {{.IP_CP2}} -n {{.IP_CP2}}"
+      - task: utils:until-succeeds
+        vars:
+          GUM_SPIN_TITLE: "Waiting for Talos to boot up..."
+          SHELL_COMMAND: "talosctl get ts --insecure -e {{.IP_CP3}} -n {{.IP_CP3}}"
+      - cmd: talosctl gen config talos-local https://{{.TALOS_VIP}}:6443 --with-docs=false --with-examples=false --kubernetes-version={{ .K8S_VERSION }} --force --output ./config --output-types "controlplane,talosconfig"
+      - cmd: talosctl config endpoint {{.IP_CP1}}
+      - cmd: talosctl config node {{.IP_CP1}}
+      - cmd: talosctl apply-config -f ./config/controlplane.yaml -n {{.IP_CP1}} -p @{{.TALOS_PATCHFILE}} --insecure
+      - cmd: talosctl apply-config -f ./config/controlplane.yaml -n {{.IP_CP2}} -p @{{.TALOS_PATCHFILE}} --insecure
+      - cmd: talosctl apply-config -f ./config/controlplane.yaml -n {{.IP_CP3}} -p @{{.TALOS_PATCHFILE}} --insecure
+      # - task: utils:until-succeeds
+      #   vars:
+      #     GUM_SPIN_TITLE: "Wait for the config to be applied..."
+      #     SHELL_COMMAND: "talosctl --talosconfig config/talosconfig service | grep kubelet | grep 'Health check successful'"
+      - cmd: gum spin --show-error --title="Waiting for Talos cluster to accept the bootstrap command..." -- sleep 5
+      - cmd: talosctl bootstrap
+      - cmd: talosctl kubeconfig --force
+      - task: utils:until-succeeds
+        vars:
+          GUM_SPIN_TITLE: "Waiting for the kubernetes-api to accept commands..."
+          SHELL_COMMAND: "kubectl get ns kube-system"
+      - task: install-cilium
+
+      # approve all kubelet certificates. This is required for the metrics-server to verify the
+      # kubelet TLS connection. These csr requests are enabled by the `serverTLSBootstrap: true`
+      # setting fed to kubeadm via a kind configuration. This is *NOT* needed in production.
+      - task: utils:wait-for
+        vars:
+          GUM_SPIN_TITLE: "Waiting for kubelet certificate signing requests..."
+          KUBECONTEXT: admin@talos-local
+          RESOURCE: csr
+          CONDITION: exists
+      - cmd: kubectl certificate approve $(kubectl get csr -o jsonpath='{.items[?(@.spec.signerName=="kubernetes.io/kubelet-serving")].metadata.name}')
+
+  install-cilium:
+    desc: "Install Cilium"
+    deps:
+      - task: check-tools
+    cmds:
+      - cmd: |
+          cilium install --version {{.CILIUM_VERSION}} \
+              --set ipam.mode=kubernetes \
+              --set kubeProxyReplacement=true \
+              --set securityContext.capabilities.ciliumAgent="{CHOWN,KILL,NET_ADMIN,NET_RAW,IPC_LOCK,SYS_ADMIN,SYS_RESOURCE,DAC_OVERRIDE,FOWNER,SETGID,SETUID}" \
+              --set securityContext.capabilities.cleanCiliumState="{NET_ADMIN,SYS_ADMIN,SYS_RESOURCE}" \
+              --set cgroup.autoMount.enabled=false \
+              --set cgroup.hostRoot=/sys/fs/cgroup \
+              --set k8sServiceHost=localhost \
+              --set k8sServicePort=7445
+      - task: utils:wait-for
+        vars:
+          GUM_SPIN_TITLE: "Waiting for cilium crd to be created..."
+          RESOURCE: crds/ciliumloadbalancerippools.cilium.io
+          CONDITION: exists
+      - cmd: |
+          kubectl apply -f - <<EOF
+            apiVersion: "cilium.io/v2alpha1"
+            kind: CiliumLoadBalancerIPPool
+            metadata:
+              name: "local-docker-network"
+            spec:
+              blocks:
+              - cidr: "$(docker network inspect -f json local-dev_talos | jq -r '.[0].IPAM.Config[0].Gateway | select( . != null )')/26"
+          EOF
+
+  delete:
+    desc: "Destroys the cluster"
+    deps:
+      - task: check-tools
+    cmds:
+      - docker compose --file ./tasks/talos/compose-ha.yaml down --volumes --timeout 1
+      - rm -rf ./config
+
+  check-tools:
+    preconditions:
+      - sh: command -v talosctl > /dev/null
+        msg: "Make sure talosctl is installed and in your path (https://www.talos.dev/)."
+      - sh: command -v kubectl > /dev/null
+        msg: "Make sure kubectl is installed and in your path (https://downloadkubernetes.com/)."
+      - sh: command -v yq > /dev/null
+        msg: "Make sure yq is installed and in your path (https://github.com/mikefarah/yq)"
+      - sh: command -v cilium > /dev/null
+        msg: "Make sure cilium is installed and in your path (https://docs.cilium.io/en/stable/gettingstarted/k8s-install-default/#install-the-cilium-cli)"

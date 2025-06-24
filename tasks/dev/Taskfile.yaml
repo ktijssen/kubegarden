@@ -6,6 +6,7 @@ includes:
   argocd: ../argocd
   k3d: ../k3d
   kind: ../kind
+  talos: ../talos
   utils: ../utils
 
 interval: 1s
@@ -24,6 +25,8 @@ tasks:
     cmds:
       - task: create-k3d-cluster
       - task: create-kind-cluster
+      - task: create-talos-cluster-single
+      - task: create-talos-cluster-ha
 
       # switch to argocd as the default namespace, this helps with argocd cli's core mode.
       - cmd: gum log --level info $(kubectl config set-context --current --namespace argocd)
@@ -80,6 +83,20 @@ tasks:
         vars:
           KIND_CONFIG: kind-config.yaml
 
+  create-talos-cluster-single:
+    desc: "Wrapper task that will only execute if the CLUSTER_TYPE matches"
+    status:
+      - '! [[ "{{.CLUSTER_TYPE}}-{{.TALOS_HA}}" == "talos-false" ]]'
+    cmds:
+      - task: talos:create-single
+
+  create-talos-cluster-ha:
+    desc: "Wrapper task that will only execute if the CLUSTER_TYPE matches"
+    status:
+      - '! [[ "{{.CLUSTER_TYPE}}-{{.TALOS_HA}}" == "talos-true" ]]'
+    cmds:
+      - task: talos:create-ha
+
   destroy:
     cmds:
       - task: k3d:delete
@@ -88,6 +105,7 @@ tasks:
       - task: kind:delete
         vars:
           KIND_CONFIG: kind-config.yaml
+      - task: talos:delete
 
   switch:
     requires:

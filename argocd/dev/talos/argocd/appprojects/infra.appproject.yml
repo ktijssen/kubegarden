@@ -1,0 +1,19 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: infra
+spec:
+  description: ArgoCD project for Infra apps
+  destinations:
+    - namespace: '!default'
+      server: '*'
+  sourceRepos:
+    - '*'
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  # orphanedResources:
+  #   warn: true

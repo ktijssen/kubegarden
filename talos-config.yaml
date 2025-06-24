@@ -1,0 +1,21 @@
+cluster:
+  # # Allow workload to run on ControlPlane
+  allowSchedulingOnControlPlanes: true
+
+  # # Disable default CNI in order to use Cilium
+  network:
+    cni:
+      name: none
+  proxy:
+    disabled: true
+
+machine:
+  kubelet:
+    extraConfig:
+      serverTLSBootstrap: true
+
+  network:
+    interfaces:
+      - interface: eth0
+        vip:
+          ip: 192.168.250.10

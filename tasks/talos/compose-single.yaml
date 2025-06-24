@@ -1,0 +1,47 @@
+name: local-dev
+
+networks:
+  talos:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: "192.168.250.0/24"
+          gateway: "192.168.250.1"
+
+volumes:
+  # ControlPlane1
+  cp1_var:
+  cp1_etc-cni:
+  cp1_etc-kubernetes:
+  cp1_usr-libexec-kubernetes:
+  cp1_opt:
+  cp1_system-state:
+
+services:
+  talos-controlplane1:
+    image: ghcr.io/siderolabs/talos:v1.10.3
+    hostname: talos-controlplane1
+    container_name: talos-controlplane1
+    environment:
+      - PLATFORM=container
+    read_only: true
+    privileged: true
+    ports:
+      - 80:32080
+      - 443:32443
+    security_opt:
+      - seccomp=unconfined
+    volumes:
+      - cp1_var:/var
+      - cp1_etc-cni:/etc/cni
+      - cp1_etc-kubernetes:/etc/kubernetes
+      - cp1_usr-libexec-kubernetes:/usr/libexec/kubernetes
+      - cp1_opt:/opt
+      - cp1_system-state:/system/state
+    tmpfs:
+      - /run
+      - /system
+      - /tmp
+    networks:
+      talos:
+        ipv4_address: 192.168.250.11
