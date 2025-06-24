@@ -1,0 +1,58 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: team-b
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - git:
+        repoURL: https://github.com/ktijssen/team-b.git
+        revision: HEAD
+        directories:
+          - path: "*/dev/talos/*"
+        values:
+          service: "{{index .path.segments 0}}"
+          stage: "{{index .path.segments 1}}"
+          cluster: "{{index .path.segments 2}}"
+          namespace: "{{index .path.segments 3}}"
+  syncPolicy:
+    applicationsSync: create-update
+  template:
+    metadata:
+      name: "{{.values.service}}-{{.values.stage}}-{{.values.cluster}}-{{.values.namespace}}"
+      labels:
+        app.kubernetes.io/name: "{{.values.service}}"
+        app.kubernetes.io/instance: "{{.values.service}}-{{.values.stage}}-{{.values.cluster}}"
+      annotations:
+        # helps with syncing apps that rely on CRDs from other apps to be deployed first.
+        argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    spec:
+      project: "team-b"
+      destination:
+        name: '{{if eq .values.cluster "talos"}}in-cluster{{else}}{{.values.cluster}}{{end}}'
+        namespace: "{{.values.namespace}}"
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+          - RespectIgnoreDifferences=true
+        retry:
+          limit: 30
+          backoff:
+            duration: 5s
+            factor: 1
+      source:
+        repoURL: https://github.com/ktijssen/team-b.git
+        targetRevision: HEAD
+        path: "{{.path.path}}"
+      ignoreDifferences:
+        # Ingress-nginx
+        - group: ""
+          kind: Service
+          jqPathExpressions:
+            - .status.loadBalancer.ingress[].ipMode
+        - kind: Pod
+          jqPathExpressions:
+            - .spec.template.spec.securityContext.appArmorProfile

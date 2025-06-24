@@ -57,7 +57,7 @@ tasks:
       - task: sync
         vars:
           ARGOCD_APPLICATIONS:
-            sh: argocd app list -o name -l 'app.kubernetes.io/name in (argocd,cilium)'
+            sh: argocd app list -o name -l 'app.kubernetes.io/name in (cilium)'
 
       # Deploy all apps unless SKIP_DEPLOY is set to true
       - task: sync-all-apps

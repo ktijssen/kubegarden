@@ -2,4 +2,6 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-- infra.appproject.yml
+  - infra.appproject.yml
+  - team-a.appproject.yml
+  - team-b.appproject.yml

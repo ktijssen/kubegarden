@@ -1,0 +1,19 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: team-a
+spec:
+  description: ArgoCD project for Team-a apps
+  destinations:
+    - namespace: "!default"
+      server: "*"
+  sourceRepos:
+    - "*"
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"
+  # orphanedResources:
+  #   warn: true
