@@ -48,6 +48,14 @@ tasks:
           SHELL_COMMAND: "kubectl get ns kube-system"
       - task: install-cilium
 
+      - task: utils:wait-for
+        vars:
+          GUM_SPIN_TITLE: "Waiting for cluster dns to become available..."
+          KUBECONTEXT: admin@talos-local
+          RESOURCE: deployment/coredns
+          CONDITION: available
+          NAMESPACE: kube-system
+
       # approve all kubelet certificates. This is required for the metrics-server to verify the
       # kubelet TLS connection. These csr requests are enabled by the `serverTLSBootstrap: true`
       # setting fed to kubeadm via a kind configuration. This is *NOT* needed in production.
@@ -114,6 +122,14 @@ tasks:
           SHELL_COMMAND: "kubectl get ns kube-system"
       - task: install-cilium
 
+      - task: utils:wait-for
+        vars:
+          GUM_SPIN_TITLE: "Waiting for cluster dns to become available..."
+          KUBECONTEXT: admin@talos-local
+          RESOURCE: deployment/coredns
+          CONDITION: available
+          NAMESPACE: kube-system
+
       # approve all kubelet certificates. This is required for the metrics-server to verify the
       # kubelet TLS connection. These csr requests are enabled by the `serverTLSBootstrap: true`
       # setting fed to kubeadm via a kind configuration. This is *NOT* needed in production.
@@ -161,8 +177,10 @@ tasks:
     deps:
       - task: check-tools
     cmds:
-      - docker compose --file ./tasks/talos/compose-ha.yaml down --volumes --timeout 1
-      - rm -rf ./config
+      - cmd: docker compose --file ./tasks/talos/compose-ha.yaml down --timeout 1
+      - cmd: docker volume rm $(docker volume ls -q | grep -v containerd) > /dev/null 2>&1
+        ignore_error: true
+      - cmd: rm -rf ./config
 
   check-tools:
     preconditions:

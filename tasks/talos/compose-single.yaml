@@ -16,6 +16,8 @@ volumes:
   cp1_usr-libexec-kubernetes:
   cp1_opt:
   cp1_system-state:
+  ## Volume for cache container images
+  cp1_containerd:
 
 services:
   talos-controlplane1:
@@ -32,6 +34,7 @@ services:
     security_opt:
       - seccomp=unconfined
     volumes:
+      - cp1_containerd:/var/lib/containerd/
       - cp1_var:/var
       - cp1_etc-cni:/etc/cni
       - cp1_etc-kubernetes:/etc/kubernetes
