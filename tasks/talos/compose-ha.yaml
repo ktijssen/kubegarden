@@ -42,7 +42,7 @@ volumes:
 
 services:
   talos-controlplane1:
-    image: ghcr.io/siderolabs/talos:v1.10.7
+    image: ghcr.io/siderolabs/talos:v1.11.2
     hostname: talos-controlplane1
     container_name: talos-controlplane1
     environment:
@@ -71,7 +71,7 @@ services:
         ipv4_address: 192.168.250.11
 
   talos-controlplane2:
-    image: ghcr.io/siderolabs/talos:v1.10.7
+    image: ghcr.io/siderolabs/talos:v1.11.2
     hostname: talos-controlplane2
     container_name: talos-controlplane2
     environment:
@@ -97,7 +97,7 @@ services:
         ipv4_address: 192.168.250.12
 
   talos-controlplane3:
-    image: ghcr.io/siderolabs/talos:v1.10.7
+    image: ghcr.io/siderolabs/talos:v1.11.2
     hostname: talos-controlplane3
     container_name: talos-controlplane3
     environment:
