@@ -21,7 +21,7 @@ volumes:
 
 services:
   talos-controlplane1:
-    image: ghcr.io/siderolabs/talos:v1.11.2
+    image: ghcr.io/siderolabs/talos:v1.11.3
     hostname: talos-controlplane1
     container_name: talos-controlplane1
     environment:
