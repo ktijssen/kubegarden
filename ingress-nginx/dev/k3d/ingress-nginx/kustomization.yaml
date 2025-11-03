@@ -11,5 +11,5 @@ helmCharts:
     name: ingress-nginx
     releaseName: ingress-nginx
     namespace: ingress-nginx
-    version: 4.13.3
+    version: 4.14.0
     valuesFile: values.yaml
