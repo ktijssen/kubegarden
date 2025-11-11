@@ -46,12 +46,12 @@ tasks:
           RESOURCE: applicationsets/{{.ARGOCD_APPSET_NAME}}
           NAMESPACE: argocd
 
-      # Deploy ingress-nginx, local-path-provisioner
+      # Deploy gateway-api, ingress-nginx, local-path-provisioner
       - task: sync
         vars:
           ARGOCD_ARGS: "--async"
           ARGOCD_APPLICATIONS:
-            sh: argocd app list -o name -l 'app.kubernetes.io/name in (ingress-nginx,local-path-provisioner)'
+            sh: argocd app list -o name -l 'app.kubernetes.io/name in (gateway-api,ingress-nginx,local-path-provisioner)'
 
       # Sync ArgoCD and Cilium
       - task: sync

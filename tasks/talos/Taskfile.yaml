@@ -56,17 +56,6 @@ tasks:
           CONDITION: available
           NAMESPACE: kube-system
 
-      # approve all kubelet certificates. This is required for the metrics-server to verify the
-      # kubelet TLS connection. These csr requests are enabled by the `serverTLSBootstrap: true`
-      # setting fed to kubeadm via a kind configuration. This is *NOT* needed in production.
-      - task: utils:wait-for
-        vars:
-          GUM_SPIN_TITLE: "Waiting for kubelet certificate signing requests..."
-          KUBECONTEXT: admin@talos-local
-          RESOURCE: csr
-          CONDITION: exists
-      - cmd: kubectl certificate approve $(kubectl get csr -o jsonpath='{.items[?(@.spec.signerName=="kubernetes.io/kubelet-serving")].metadata.name}')
-
   create-ha:
     desc: "Creates a HA Talos cluster"
     deps:
@@ -130,26 +119,20 @@ tasks:
           CONDITION: available
           NAMESPACE: kube-system
 
-      # approve all kubelet certificates. This is required for the metrics-server to verify the
-      # kubelet TLS connection. These csr requests are enabled by the `serverTLSBootstrap: true`
-      # setting fed to kubeadm via a kind configuration. This is *NOT* needed in production.
-      - task: utils:wait-for
-        vars:
-          GUM_SPIN_TITLE: "Waiting for kubelet certificate signing requests..."
-          KUBECONTEXT: admin@talos-local
-          RESOURCE: csr
-          CONDITION: exists
-      - cmd: kubectl certificate approve $(kubectl get csr -o jsonpath='{.items[?(@.spec.signerName=="kubernetes.io/kubelet-serving")].metadata.name}')
-
   install-cilium:
-    desc: "Install Cilium"
+    desc: "Install Gateway-API with Cilium"
     deps:
       - task: check-tools
     cmds:
+      - cmd: gum spin --title "Applying Gateway-API crds..." -- kubectl apply -k gateway-api/dev/talos/kube-system/ >/dev/null 2>&1
       - cmd: |
           cilium install --version {{.CILIUM_VERSION}} \
               --set ipam.mode=kubernetes \
               --set kubeProxyReplacement=true \
+              --set gatewayAPI.enabled=true \
+              --set gatewayAPI.enableAppProtocol=true \
+              --set gatewayAPI.enableAlpn=true \
+              --set envoy.enabled=false \
               --set securityContext.capabilities.ciliumAgent="{CHOWN,KILL,NET_ADMIN,NET_RAW,IPC_LOCK,SYS_ADMIN,SYS_RESOURCE,DAC_OVERRIDE,FOWNER,SETGID,SETUID}" \
               --set securityContext.capabilities.cleanCiliumState="{NET_ADMIN,SYS_ADMIN,SYS_RESOURCE}" \
               --set cgroup.autoMount.enabled=false \

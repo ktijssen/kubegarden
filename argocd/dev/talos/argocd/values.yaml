@@ -26,10 +26,7 @@ server:
       memory: 48Mi
 
   ingress:
-    enabled: true
-    ingressClassName: nginx
-    hostname: argocd.localhost
-    tls: false
+    enabled: false
 
 # CRDs are managed outside of this helm chart
 crds:
