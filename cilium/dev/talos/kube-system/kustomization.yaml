@@ -9,7 +9,7 @@ helmCharts:
     namespace: kube-system
     releaseName: cilium
     includeCRDs: true
-    version: 1.18.3
+    version: 1.18.4
     valuesFile: values.yaml
 
 resources:
