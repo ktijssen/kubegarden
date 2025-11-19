@@ -1,0 +1,59 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: spegel
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: spegel
+  ingress:
+    # Allow from Spegel
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: spegel
+      toPorts:
+        - ports:
+            - port: "5000"
+              protocol: TCP
+            - port: "5001"
+              protocol: TCP
+    # Allow from Remote-Node
+    - fromEntities:
+        - remote-node
+      toPorts:
+        - ports:
+            - port: "5000"
+              protocol: TCP
+    # Allow from Ingress
+    - fromEntities:
+        - ingress
+      toPorts:
+        - ports:
+            - port: "9090"
+              protocol: TCP
+  egress:
+    # Allow access to Spegel
+    - toEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: spegel
+      toPorts:
+        - ports:
+            - port: "5000"
+              protocol: TCP
+            - port: "5001"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: spegel-nodeport
+spec:
+  endpointSelector: {}
+  ingress:
+    # Allow from Spegel
+    - fromEntities:
+        - cluster
+  egress:
+    # Allow access to Spegel
+    - toEntities:
+        - cluster

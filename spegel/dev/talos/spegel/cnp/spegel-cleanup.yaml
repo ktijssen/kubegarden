@@ -1,0 +1,19 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: spegel-cleanup
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: spegel
+      app.kubernetes.io/component: cleanup
+  ingress:
+    # Allow from Spegel-cleanup-wait
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: spegel
+            app.kubernetes.io/component: cleanup-wait
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
