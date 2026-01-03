@@ -14,5 +14,5 @@ helmCharts:
     name: argo-cd
     releaseName: argocd
     namespace: argocd
-    version: 9.1.4
+    version: 9.2.4
     valuesFile: values.yaml
