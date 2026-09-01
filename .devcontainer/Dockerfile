@@ -1,1 +1,1 @@
-FROM kevintijssen/devcontainer-base:2026.04
+FROM kevintijssen/devcontainer-base:2026.09
